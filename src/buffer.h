@@ -28,6 +28,8 @@
 
 #pragma once
 
+#include <stdbool.h>
+
 // Size of each memory slot.
 #if defined(_M_X64) || defined(__x86_64__)
     #define MEMORY_SLOT_SIZE 64
@@ -35,8 +37,8 @@
     #define MEMORY_SLOT_SIZE 32
 #endif
 
-VOID   InitializeBuffer(VOID);
-VOID   UninitializeBuffer(VOID);
-LPVOID AllocateBuffer(LPVOID pOrigin);
-VOID   FreeBuffer(LPVOID pBuffer);
-BOOL   IsExecutableAddress(LPVOID pAddress);
+void   InitializeBuffer(void);
+void   UninitializeBuffer(void);
+void  *AllocateBuffer(void *pOrigin);
+void   FreeBuffer(void *pBuffer);
+bool   IsExecutableAddress(void *pAddress);

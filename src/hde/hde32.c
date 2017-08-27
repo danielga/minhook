@@ -5,21 +5,27 @@
  *
  */
 
-#if defined(_M_IX86) || defined(__i386__)
-
 #include "hde32.h"
 #include "table32.h"
 
+#ifdef _MSC_VER
+#include <intrin.h>
+#else
+#include <string.h>
+#endif
+
+#if defined(_M_IX86) || defined(__i386__)
+
 unsigned int hde32_disasm(const void *code, hde32s *hs)
 {
-    uint8_t x, c, *p = (uint8_t *)code, cflags, opcode, pref = 0;
+    uint8_t x, c = 0, *p = (uint8_t *)code, cflags, opcode, pref = 0;
     uint8_t *ht = hde32_table, m_mod, m_reg, m_rm, disp_size = 0;
 
     // Avoid using memset to reduce the footprint.
 #ifndef _MSC_VER
-    memset((LPBYTE)hs, 0, sizeof(hde32s));
+    memset((uint8_t *)hs, 0, sizeof(hde32s));
 #else
-    __stosb((LPBYTE)hs, 0, sizeof(hde32s));
+    __stosb((uint8_t *)hs, 0, sizeof(hde32s));
 #endif
 
     for (x = 16; x; x--)

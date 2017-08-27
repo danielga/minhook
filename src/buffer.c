@@ -26,7 +26,18 @@
  *  SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#ifdef _WIN32
 #include <windows.h>
+#else
+#include <sys/mman.h>
+#include <unistd.h>
+#include <stdio.h>
+#include <inttypes.h>
+#include <limits.h>
+#endif
+
+#include <stdint.h>
+#include <string.h>
 #include "buffer.h"
 
 // Size of each memory block. (= page size of VirtualAlloc)
@@ -40,13 +51,10 @@
     (PAGE_EXECUTE | PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY)
 
 // Memory slot.
-typedef struct _MEMORY_SLOT
+typedef union _MEMORY_SLOT
 {
-    union
-    {
-        struct _MEMORY_SLOT *pNext;
-        UINT8 buffer[MEMORY_SLOT_SIZE];
-    };
+    union _MEMORY_SLOT *pNext;
+    uint8_t buffer[MEMORY_SLOT_SIZE];
 } MEMORY_SLOT, *PMEMORY_SLOT;
 
 // Memory block info. Placed at the head of each block.
@@ -54,7 +62,7 @@ typedef struct _MEMORY_BLOCK
 {
     struct _MEMORY_BLOCK *pNext;
     PMEMORY_SLOT pFree;         // First element of the free slot list.
-    UINT usedCount;
+    uint32_t usedCount;
 } MEMORY_BLOCK, *PMEMORY_BLOCK;
 
 //-------------------------------------------------------------------------
@@ -65,13 +73,13 @@ typedef struct _MEMORY_BLOCK
 PMEMORY_BLOCK g_pMemoryBlocks;
 
 //-------------------------------------------------------------------------
-VOID InitializeBuffer(VOID)
+void InitializeBuffer(void)
 {
     // Nothing to do for now.
 }
 
 //-------------------------------------------------------------------------
-VOID UninitializeBuffer(VOID)
+void UninitializeBuffer(void)
 {
     PMEMORY_BLOCK pBlock = g_pMemoryBlocks;
     g_pMemoryBlocks = NULL;
@@ -79,13 +87,17 @@ VOID UninitializeBuffer(VOID)
     while (pBlock)
     {
         PMEMORY_BLOCK pNext = pBlock->pNext;
+#ifdef _WIN32
         VirtualFree(pBlock, 0, MEM_RELEASE);
+#else
+        munmap(pBlock, MEMORY_BLOCK_SIZE);
+#endif
         pBlock = pNext;
     }
 }
 
 //-------------------------------------------------------------------------
-#if defined(_M_X64) || defined(__x86_64__)
+#if (defined(_M_X64) || defined(__x86_64__)) && defined(_WIN32)
 static LPVOID FindPrevFreeRegion(LPVOID pAddress, LPVOID pMinAddr, DWORD dwAllocationGranularity)
 {
     ULONG_PTR tryAddr = (ULONG_PTR)pAddress;
@@ -116,7 +128,7 @@ static LPVOID FindPrevFreeRegion(LPVOID pAddress, LPVOID pMinAddr, DWORD dwAlloc
 #endif
 
 //-------------------------------------------------------------------------
-#if defined(_M_X64) || defined(__x86_64__)
+#if (defined(_M_X64) || defined(__x86_64__)) && defined(_WIN32)
 static LPVOID FindNextFreeRegion(LPVOID pAddress, LPVOID pMaxAddr, DWORD dwAllocationGranularity)
 {
     ULONG_PTR tryAddr = (ULONG_PTR)pAddress;
@@ -148,27 +160,37 @@ static LPVOID FindNextFreeRegion(LPVOID pAddress, LPVOID pMaxAddr, DWORD dwAlloc
 #endif
 
 //-------------------------------------------------------------------------
-static PMEMORY_BLOCK GetMemoryBlock(LPVOID pOrigin)
+static PMEMORY_BLOCK GetMemoryBlock(void *pOrigin)
 {
     PMEMORY_BLOCK pBlock;
 #if defined(_M_X64) || defined(__x86_64__)
-    ULONG_PTR minAddr;
-    ULONG_PTR maxAddr;
+    uintptr_t minAddr;
+    uintptr_t maxAddr;
 
+#ifdef _WIN32
     SYSTEM_INFO si;
     GetSystemInfo(&si);
-    minAddr = (ULONG_PTR)si.lpMinimumApplicationAddress;
-    maxAddr = (ULONG_PTR)si.lpMaximumApplicationAddress;
+    DWORD dwAllocationGranularity = si.dwAllocationGranularity;
+    minAddr = (uintptr_t)si.lpMinimumApplicationAddress;
+    maxAddr = (uintptr_t)si.lpMaximumApplicationAddress;
+#else
+    // Taken from coreclr sysinfo.cpp
+    long dwAllocationGranularity = sysconf(_SC_PAGESIZE);
+    maxAddr = (uintptr_t)(1ull << 47);
+    minAddr = (uintptr_t)dwAllocationGranularity;
+#endif
 
     // pOrigin ± 512MB
-    if ((ULONG_PTR)pOrigin > MAX_MEMORY_RANGE && minAddr < (ULONG_PTR)pOrigin - MAX_MEMORY_RANGE)
-        minAddr = (ULONG_PTR)pOrigin - MAX_MEMORY_RANGE;
+    if ((uintptr_t)pOrigin > MAX_MEMORY_RANGE && minAddr < (uintptr_t)pOrigin - MAX_MEMORY_RANGE)
+        minAddr = (uintptr_t)pOrigin - MAX_MEMORY_RANGE;
 
-    if (maxAddr > (ULONG_PTR)pOrigin + MAX_MEMORY_RANGE)
-        maxAddr = (ULONG_PTR)pOrigin + MAX_MEMORY_RANGE;
+    if (maxAddr > (uintptr_t)pOrigin + MAX_MEMORY_RANGE)
+        maxAddr = (uintptr_t)pOrigin + MAX_MEMORY_RANGE;
 
     // Make room for MEMORY_BLOCK_SIZE bytes.
     maxAddr -= MEMORY_BLOCK_SIZE - 1;
+#else
+    (void)pOrigin;
 #endif
 
     // Look the registered blocks for a reachable one.
@@ -176,7 +198,7 @@ static PMEMORY_BLOCK GetMemoryBlock(LPVOID pOrigin)
     {
 #if defined(_M_X64) || defined(__x86_64__)
         // Ignore the blocks too far.
-        if ((ULONG_PTR)pBlock < minAddr || (ULONG_PTR)pBlock >= maxAddr)
+        if ((uintptr_t)pBlock < minAddr || (uintptr_t)pBlock >= maxAddr)
             continue;
 #endif
         // The block has at least one unused slot.
@@ -187,10 +209,11 @@ static PMEMORY_BLOCK GetMemoryBlock(LPVOID pOrigin)
 #if defined(_M_X64) || defined(__x86_64__)
     // Alloc a new block above if not found.
     {
-        LPVOID pAlloc = pOrigin;
-        while ((ULONG_PTR)pAlloc >= minAddr)
+#ifdef _WIN32
+        void *pAlloc = pOrigin;
+        while ((uintptr_t)pAlloc >= minAddr)
         {
-            pAlloc = FindPrevFreeRegion(pAlloc, (LPVOID)minAddr, si.dwAllocationGranularity);
+            pAlloc = FindPrevFreeRegion(pAlloc, (void *)minAddr, dwAllocationGranularity);
             if (pAlloc == NULL)
                 break;
 
@@ -199,28 +222,59 @@ static PMEMORY_BLOCK GetMemoryBlock(LPVOID pOrigin)
             if (pBlock != NULL)
                 break;
         }
+#else
+        // Let the kernel find us a block before the address given
+        pBlock = (PMEMORY_BLOCK)mmap(
+            (void *)minAddr, MEMORY_BLOCK_SIZE, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+
+        intptr_t diff = (intptr_t)pBlock - (intptr_t)pOrigin;
+        if (diff < INT_MIN || diff > INT_MAX)
+        {
+            munmap(pBlock, MEMORY_BLOCK_SIZE);
+            pBlock = NULL;
+        }
+#endif
     }
 
     // Alloc a new block below if not found.
     if (pBlock == NULL)
     {
-        LPVOID pAlloc = pOrigin;
-        while ((ULONG_PTR)pAlloc <= maxAddr)
+#ifdef _WIN32
+        void *pAlloc = pOrigin;
+        while ((uintptr_t)pAlloc <= maxAddr)
         {
-            pAlloc = FindNextFreeRegion(pAlloc, (LPVOID)maxAddr, si.dwAllocationGranularity);
+            pAlloc = FindNextFreeRegion(pAlloc, (void *)maxAddr, dwAllocationGranularity);
             if (pAlloc == NULL)
                 break;
 
             pBlock = (PMEMORY_BLOCK)VirtualAlloc(
                 pAlloc, MEMORY_BLOCK_SIZE, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+
             if (pBlock != NULL)
                 break;
         }
+#else
+        // Let the kernel find us a block after the address given
+        pBlock = (PMEMORY_BLOCK)mmap(
+            pOrigin, MEMORY_BLOCK_SIZE, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+
+        intptr_t diff = (intptr_t)pBlock - (intptr_t)pOrigin;
+        if (diff > INT_MAX || diff < INT_MIN)
+        {
+            munmap(pBlock, MEMORY_BLOCK_SIZE);
+            pBlock = NULL;
+        }
+#endif
     }
 #else
     // In x86 mode, a memory block can be placed anywhere.
+#ifdef _WIN32
     pBlock = (PMEMORY_BLOCK)VirtualAlloc(
         NULL, MEMORY_BLOCK_SIZE, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+#else
+    pBlock = (PMEMORY_BLOCK)mmap(
+        NULL, MEMORY_BLOCK_SIZE, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+#endif
 #endif
 
     if (pBlock != NULL)
@@ -234,7 +288,7 @@ static PMEMORY_BLOCK GetMemoryBlock(LPVOID pOrigin)
             pSlot->pNext = pBlock->pFree;
             pBlock->pFree = pSlot;
             pSlot++;
-        } while ((ULONG_PTR)pSlot - (ULONG_PTR)pBlock <= MEMORY_BLOCK_SIZE - MEMORY_SLOT_SIZE);
+        } while ((uintptr_t)pSlot - (uintptr_t)pBlock <= MEMORY_BLOCK_SIZE - MEMORY_SLOT_SIZE);
 
         pBlock->pNext = g_pMemoryBlocks;
         g_pMemoryBlocks = pBlock;
@@ -244,7 +298,7 @@ static PMEMORY_BLOCK GetMemoryBlock(LPVOID pOrigin)
 }
 
 //-------------------------------------------------------------------------
-LPVOID AllocateBuffer(LPVOID pOrigin)
+void *AllocateBuffer(void *pOrigin)
 {
     PMEMORY_SLOT  pSlot;
     PMEMORY_BLOCK pBlock = GetMemoryBlock(pOrigin);
@@ -263,15 +317,15 @@ LPVOID AllocateBuffer(LPVOID pOrigin)
 }
 
 //-------------------------------------------------------------------------
-VOID FreeBuffer(LPVOID pBuffer)
+void FreeBuffer(void *pBuffer)
 {
     PMEMORY_BLOCK pBlock = g_pMemoryBlocks;
     PMEMORY_BLOCK pPrev = NULL;
-    ULONG_PTR pTargetBlock = ((ULONG_PTR)pBuffer / MEMORY_BLOCK_SIZE) * MEMORY_BLOCK_SIZE;
+    uintptr_t pTargetBlock = ((uintptr_t)pBuffer / MEMORY_BLOCK_SIZE) * MEMORY_BLOCK_SIZE;
 
     while (pBlock != NULL)
     {
-        if ((ULONG_PTR)pBlock == pTargetBlock)
+        if ((uintptr_t)pBlock == pTargetBlock)
         {
             PMEMORY_SLOT pSlot = (PMEMORY_SLOT)pBuffer;
 #ifdef _DEBUG
@@ -291,7 +345,11 @@ VOID FreeBuffer(LPVOID pBuffer)
                 else
                     g_pMemoryBlocks = pBlock->pNext;
 
+#ifdef _WIN32
                 VirtualFree(pBlock, 0, MEM_RELEASE);
+#else
+                munmap(pBlock, MEMORY_BLOCK_SIZE);
+#endif
             }
 
             break;
@@ -303,10 +361,33 @@ VOID FreeBuffer(LPVOID pBuffer)
 }
 
 //-------------------------------------------------------------------------
-BOOL IsExecutableAddress(LPVOID pAddress)
+bool IsExecutableAddress(void *pAddress)
 {
+#ifdef _WIN32
     MEMORY_BASIC_INFORMATION mi;
     VirtualQuery(pAddress, &mi, sizeof(mi));
 
     return (mi.State == MEM_COMMIT && (mi.Protect & PAGE_EXECUTE_FLAGS));
+#else
+    uintptr_t address = (uintptr_t)pAddress;
+    char line[BUFSIZ] = { 0 };
+
+    FILE *file = fopen("/proc/self/maps", "r");
+    if (file == NULL)
+        return false;
+
+    while (fgets(line, sizeof(line), file) != NULL)
+    {
+        uint64_t start = 0, end = 0;
+        char prot[5] = { 0 };
+        if (sscanf(line, "%" SCNx64 "-%" SCNx64 " %4[rwxsp-]", &start, &end, prot) == 3 && start <= address && end >= address)
+        {
+            fclose(file);
+            return prot[2] == 'x';
+        }
+    }
+
+    fclose(file);
+    return false;
+#endif
 }
