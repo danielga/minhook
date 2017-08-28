@@ -8,9 +8,7 @@ http://www.codeproject.com/KB/winsdk/LibMinHook.aspx
 
 ## CrossHook
 
-A fork of the MinHook library, with support for POSIX
-
-This fork adds support for POSIX platforms (with MacOS X thread suspension and context changing support in the future).
+A fork of the MinHook library, with support for POSIX and MacOS X
 
 No previous behavior should have changed, besides the lack of thread suspension in POSIX, which will probably never be added, looking at the state of their API.
 However, there is an assumption being made in the function GetMemoryBlock, located at buffer.c, that is, mmap should use the address hint given to it to allocate a block of memory close to the origin address.
@@ -22,6 +20,11 @@ I need some funds to continue developing this library. All contributions gratefu
 <a href='https://pledgie.com/campaigns/27314'><img alt='Click here to lend your support to: MinHook - Help me continue to develop this library and make a donation at pledgie.com !' src='https://pledgie.com/campaigns/27314.png?skin_name=chrome' border='0' ></a>
 
 ### Version history
+
+- **v1.3.5 - 28 Aug 2017**
+  * Improved architecture discovery
+  * Added full MacOS X support (thread suspension and context changing, untested as of this day)
+  * Added GCC Makefile (able to compile for Windows, Linux and MacOS X)
 
 - **v1.3.4 - 27 Aug 2017**
   * Added POSIX support
