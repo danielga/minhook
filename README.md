@@ -10,7 +10,7 @@ http://www.codeproject.com/KB/winsdk/LibMinHook.aspx
 
 A fork of the MinHook library, with support for POSIX and MacOS X
 
-No previous behavior should have changed, besides the lack of thread suspension in POSIX, which will probably never be added, looking at the state of their API.
+No previous behavior should have changed, besides the lack of thread suspension and context changing in POSIX, which will probably never be added, looking at the state of their API.
 However, there is an assumption being made in the function GetMemoryBlock, located at buffer.c, that is, mmap should use the address hint given to it to allocate a block of memory close to the origin address.
 
 ### Donation please
