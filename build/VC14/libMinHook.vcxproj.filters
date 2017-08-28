@@ -31,9 +31,6 @@
     <ClInclude Include="..\..\src\HDE\hde64.h">
       <Filter>HDE</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\src\HDE\pstdint.h">
-      <Filter>HDE</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\src\HDE\table32.h">
       <Filter>HDE</Filter>
     </ClInclude>

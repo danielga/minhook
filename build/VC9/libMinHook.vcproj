@@ -388,10 +388,6 @@
 				>
 			</File>
 			<File
-				RelativePath="..\..\src\HDE\pstdint.h"
-				>
-			</File>
-			<File
 				RelativePath="..\..\src\HDE\table32.h"
 				>
 			</File>
