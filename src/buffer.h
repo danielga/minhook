@@ -29,9 +29,10 @@
 #pragma once
 
 #include <stdbool.h>
+#include "architecture.h"
 
 // Size of each memory slot.
-#if defined(_M_X64) || defined(__x86_64__)
+#ifdef MH_X86_64
     #define MEMORY_SLOT_SIZE 64
 #else
     #define MEMORY_SLOT_SIZE 32

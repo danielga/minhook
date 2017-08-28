@@ -97,7 +97,7 @@ void UninitializeBuffer(void)
 }
 
 //-------------------------------------------------------------------------
-#if (defined(_M_X64) || defined(__x86_64__)) && defined(_WIN32)
+#if defined(MH_X86_64) && defined(_WIN32)
 static LPVOID FindPrevFreeRegion(LPVOID pAddress, LPVOID pMinAddr, DWORD dwAllocationGranularity)
 {
     ULONG_PTR tryAddr = (ULONG_PTR)pAddress;
@@ -128,7 +128,7 @@ static LPVOID FindPrevFreeRegion(LPVOID pAddress, LPVOID pMinAddr, DWORD dwAlloc
 #endif
 
 //-------------------------------------------------------------------------
-#if (defined(_M_X64) || defined(__x86_64__)) && defined(_WIN32)
+#if defined(MH_X86_64) && defined(_WIN32)
 static LPVOID FindNextFreeRegion(LPVOID pAddress, LPVOID pMaxAddr, DWORD dwAllocationGranularity)
 {
     ULONG_PTR tryAddr = (ULONG_PTR)pAddress;
@@ -163,7 +163,7 @@ static LPVOID FindNextFreeRegion(LPVOID pAddress, LPVOID pMaxAddr, DWORD dwAlloc
 static PMEMORY_BLOCK GetMemoryBlock(void *pOrigin)
 {
     PMEMORY_BLOCK pBlock;
-#if defined(_M_X64) || defined(__x86_64__)
+#ifdef MH_X86_64
     uintptr_t minAddr;
     uintptr_t maxAddr;
 
@@ -196,7 +196,7 @@ static PMEMORY_BLOCK GetMemoryBlock(void *pOrigin)
     // Look the registered blocks for a reachable one.
     for (pBlock = g_pMemoryBlocks; pBlock != NULL; pBlock = pBlock->pNext)
     {
-#if defined(_M_X64) || defined(__x86_64__)
+#ifdef MH_X86_64
         // Ignore the blocks too far.
         if ((uintptr_t)pBlock < minAddr || (uintptr_t)pBlock >= maxAddr)
             continue;
@@ -206,7 +206,7 @@ static PMEMORY_BLOCK GetMemoryBlock(void *pOrigin)
             return pBlock;
     }
 
-#if defined(_M_X64) || defined(__x86_64__)
+#ifdef MH_X86_64
     // Alloc a new block above if not found.
     {
 #ifdef _WIN32
@@ -225,7 +225,7 @@ static PMEMORY_BLOCK GetMemoryBlock(void *pOrigin)
 #else
         // Let the kernel find us a block before the address given
         pBlock = (PMEMORY_BLOCK)mmap(
-            (void *)minAddr, MEMORY_BLOCK_SIZE, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+            (void *)minAddr, MEMORY_BLOCK_SIZE, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANON, -1, 0);
 
         intptr_t diff = (intptr_t)pBlock - (intptr_t)pOrigin;
         if (diff < INT_MIN || diff > INT_MAX)
@@ -256,7 +256,7 @@ static PMEMORY_BLOCK GetMemoryBlock(void *pOrigin)
 #else
         // Let the kernel find us a block after the address given
         pBlock = (PMEMORY_BLOCK)mmap(
-            pOrigin, MEMORY_BLOCK_SIZE, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+            pOrigin, MEMORY_BLOCK_SIZE, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANON, -1, 0);
 
         intptr_t diff = (intptr_t)pBlock - (intptr_t)pOrigin;
         if (diff > INT_MAX || diff < INT_MIN)
@@ -273,7 +273,7 @@ static PMEMORY_BLOCK GetMemoryBlock(void *pOrigin)
         NULL, MEMORY_BLOCK_SIZE, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
 #else
     pBlock = (PMEMORY_BLOCK)mmap(
-        NULL, MEMORY_BLOCK_SIZE, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        NULL, MEMORY_BLOCK_SIZE, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANON, -1, 0);
 #endif
 #endif
 

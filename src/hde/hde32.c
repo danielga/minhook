@@ -14,7 +14,7 @@
 #include <string.h>
 #endif
 
-#if defined(_M_IX86) || defined(__i386__)
+#if defined(_M_IX86) || defined(___i386__) || defined(__i386) || defined(__X86__) || defined(_X86_) || defined(__I86__)
 
 unsigned int hde32_disasm(const void *code, hde32s *hs)
 {
@@ -329,4 +329,4 @@ unsigned int hde32_disasm(const void *code, hde32s *hs)
     return (unsigned int)hs->len;
 }
 
-#endif // defined(_M_IX86) || defined(__i386__)
+#endif // defined(_M_IX86) || defined(___i386__) || defined(__i386) || defined(__X86__) || defined(_X86_) || defined(__I86__)

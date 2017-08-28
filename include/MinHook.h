@@ -28,7 +28,8 @@
 
 #pragma once
 
-#if !(defined _M_IX86) && !(defined _M_X64) && !(defined __i386__) && !(defined __x86_64__)
+#if !(defined(_M_IX86) || defined(___i386__) || defined(__i386) || defined(__X86__) || defined(_X86_) || defined(__I86__) || \
+    defined(_M_X64) || defined(__amd64__) || defined(__amd64) || defined(__x86_64__) || defined(__x86_64))
     #error MinHook supports only x86 and x64 systems.
 #endif
 

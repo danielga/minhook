@@ -30,6 +30,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include "architecture.h"
 
 #pragma pack(push, 1)
 
@@ -96,7 +97,7 @@ typedef struct _TRAMPOLINE
     void    *pDetour;         // [In] Address of the detour function.
     void    *pTrampoline;     // [In] Buffer address for the trampoline and relay function.
 
-#if defined(_M_X64) || defined(__x86_64__)
+#ifdef MH_X86_64
     void    *pRelay;          // [Out] Address of the relay function.
 #endif
     int      patchAbove;      // [Out] Should use the hot patch area?

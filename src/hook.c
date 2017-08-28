@@ -38,6 +38,11 @@
 #include <locale.h>
 #endif
 
+#ifdef __APPLE__
+#include <mach/mach.h>
+#include <mach/mach_vm.h>
+#endif
+
 #include <limits.h>
 
 #include "../include/MinHook.h"
@@ -72,7 +77,7 @@ typedef struct _HOOK_ENTRY
     uint8_t  newIPs[8];           // Instruction boundaries of the trampoline function.
 } HOOK_ENTRY, *PHOOK_ENTRY;
 
-#ifdef _WIN32
+#if defined(_WIN32) || defined(__APPLE__)
 // Initial capacity of the thread IDs buffer.
 #define INITIAL_THREAD_CAPACITY 128
 
@@ -81,16 +86,23 @@ typedef struct _HOOK_ENTRY
 #define ACTION_ENABLE       1
 #define ACTION_APPLY_QUEUED 2
 
+#ifdef _WIN32
 // Thread access rights for suspending/resuming threads.
 #define THREAD_ACCESS \
     (THREAD_SUSPEND_RESUME | THREAD_GET_CONTEXT | THREAD_QUERY_INFORMATION | THREAD_SET_CONTEXT)
 
+typedef HANDLE THREAD_HANDLE;
+typedef uint32_t *THREAD_ITEMS;
+#else
+typedef thread_act_t THREAD_HANDLE, *THREAD_ITEMS;
+#endif
+
 // Suspended threads for Freeze()/Unfreeze().
 typedef struct _FROZEN_THREADS
 {
-    uint32_t *pItems;         // Data heap
-    uint32_t  capacity;       // Size of allocated data heap, items
-    uint32_t  size;           // Actual number of data items
+    THREAD_ITEMS pItems;         // Data heap
+    uint32_t     capacity;       // Size of allocated data heap, items
+    uint32_t     size;           // Actual number of data items
 } FROZEN_THREADS, *PFROZEN_THREADS;
 #endif
 
@@ -191,24 +203,24 @@ static void DeleteHookEntry(uint32_t pos)
 }
 
 //-------------------------------------------------------------------------
-#ifdef _WIN32
-static DWORD_PTR FindOldIP(PHOOK_ENTRY pHook, DWORD_PTR ip)
+#if defined(_WIN32) || defined(__APPLE__)
+static uintptr_t FindOldIP(PHOOK_ENTRY pHook, uintptr_t ip)
 {
     uint32_t i;
 
-    if (pHook->patchAbove && ip == ((DWORD_PTR)pHook->pTarget - sizeof(JMP_REL)))
-        return (DWORD_PTR)pHook->pTarget;
+    if (pHook->patchAbove && ip == ((uintptr_t)pHook->pTarget - sizeof(JMP_REL)))
+        return (uintptr_t)pHook->pTarget;
 
     for (i = 0; i < pHook->nIP; ++i)
     {
-        if (ip == ((DWORD_PTR)pHook->pTrampoline + pHook->newIPs[i]))
-            return (DWORD_PTR)pHook->pTarget + pHook->oldIPs[i];
+        if (ip == ((uintptr_t)pHook->pTrampoline + pHook->newIPs[i]))
+            return (uintptr_t)pHook->pTarget + pHook->oldIPs[i];
     }
 
-#if defined(_M_X64) || defined(__x86_64__)
+#ifdef MH_X86_64
     // Check relay function.
-    if (ip == (DWORD_PTR)pHook->pDetour)
-        return (DWORD_PTR)pHook->pTarget;
+    if (ip == (uintptr_t)pHook->pDetour)
+        return (uintptr_t)pHook->pTarget;
 #endif
 
     return 0;
@@ -216,14 +228,14 @@ static DWORD_PTR FindOldIP(PHOOK_ENTRY pHook, DWORD_PTR ip)
 #endif
 
 //-------------------------------------------------------------------------
-#ifdef _WIN32
-static DWORD_PTR FindNewIP(PHOOK_ENTRY pHook, DWORD_PTR ip)
+#if defined(_WIN32) || defined(__APPLE__)
+static uintptr_t FindNewIP(PHOOK_ENTRY pHook, uintptr_t ip)
 {
     uint32_t i;
     for (i = 0; i < pHook->nIP; ++i)
     {
-        if (ip == ((DWORD_PTR)pHook->pTarget + pHook->oldIPs[i]))
-            return (DWORD_PTR)pHook->pTrampoline + pHook->newIPs[i];
+        if (ip == ((uintptr_t)pHook->pTarget + pHook->oldIPs[i]))
+            return (uintptr_t)pHook->pTrampoline + pHook->newIPs[i];
     }
 
     return 0;
@@ -231,22 +243,42 @@ static DWORD_PTR FindNewIP(PHOOK_ENTRY pHook, DWORD_PTR ip)
 #endif
 
 //-------------------------------------------------------------------------
-#ifdef _WIN32
-static void ProcessThreadIPs(HANDLE hThread, uint32_t pos, uint32_t action)
+#if defined(_WIN32) || defined(__APPLE__)
+static void ProcessThreadIPs(THREAD_HANDLE hThread, uint32_t pos, uint32_t action)
 {
     // If the thread suspended in the overwritten area,
     // move IP to the proper address.
 
+#ifdef _WIN32
     CONTEXT  c;
-#if defined(_M_X64) || defined(__x86_64__)
+#ifdef MH_X86_64
     PDWORD64 pIP = &c.Rip;
 #else
     PDWORD   pIP = &c.Eip;
 #endif
-    uint32_t  count;
+#else
+#ifdef MH_X86_64
+    mach_msg_type_number_t stateCount = x86_THREAD_STATE64_COUNT;
+    x86_thread_state64_t   c;
+    uint64_t              *pIP = &c.__rip;
+#else
+    mach_msg_type_number_t stateCount = x86_THREAD_STATE32_COUNT;
+    i386_thread_state_t    c;
+    uint32_t              *pIP = &c.__eip;
+#endif
+#endif
+    uint32_t count;
 
+#ifdef _WIN32
     c.ContextFlags = CONTEXT_CONTROL;
     if (!GetThreadContext(hThread, &c))
+#else
+#ifdef MH_X86_64
+    if (thread_get_state(hThread, x86_THREAD_STATE64, (thread_state_t)&c, &stateCount) != KERN_SUCCESS)
+#else
+    if (thread_get_state(hThread, x86_THREAD_STATE32, (thread_state_t)&c, &stateCount) != KERN_SUCCESS)
+#endif
+#endif
         return;
 
     if (pos == ALL_HOOKS_POS)
@@ -263,7 +295,7 @@ static void ProcessThreadIPs(HANDLE hThread, uint32_t pos, uint32_t action)
     {
         PHOOK_ENTRY pHook = &g_hooks.pItems[pos];
         bool        enable;
-        DWORD_PTR   ip;
+        uintptr_t   ip;
 
         switch (action)
         {
@@ -290,14 +322,22 @@ static void ProcessThreadIPs(HANDLE hThread, uint32_t pos, uint32_t action)
         if (ip != 0)
         {
             *pIP = ip;
+#ifdef _WIN32
             SetThreadContext(hThread, &c);
+#else
+#ifdef MH_X86_64
+            thread_set_state(hThread, x86_THREAD_STATE64, (thread_state_t)&c, x86_THREAD_STATE64_COUNT);
+#else
+            thread_set_state(hThread, x86_THREAD_STATE32, (thread_state_t)&c, x86_THREAD_STATE32_COUNT);
+#endif
+#endif
         }
     }
 }
 #endif
 
 //-------------------------------------------------------------------------
-#ifdef _WIN32
+#if defined(_WIN32)
 static void EnumerateThreads(PFROZEN_THREADS pThreads)
 {
     HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
@@ -309,7 +349,7 @@ static void EnumerateThreads(PFROZEN_THREADS pThreads)
         {
             do
             {
-                if (te.dwSize >= (FIELD_OFFSET(THREADENTRY32, th32OwnerProcessID) + sizeof(DWORD))
+                if (te.dwSize >= (FIELD_OFFSET(THREADENTRY32, th32OwnerProcessID) + sizeof(uint32_t))
                     && te.th32OwnerProcessID == GetCurrentProcessId()
                     && te.th32ThreadID != GetCurrentThreadId())
                 {
@@ -317,14 +357,14 @@ static void EnumerateThreads(PFROZEN_THREADS pThreads)
                     {
                         pThreads->capacity = INITIAL_THREAD_CAPACITY;
                         pThreads->pItems
-                            = (uint32_t *)HeapAlloc(g_hHeap, 0, pThreads->capacity * sizeof(DWORD));
+                            = (uint32_t *)HeapAlloc(g_hHeap, 0, pThreads->capacity * sizeof(uint32_t));
                         if (pThreads->pItems == NULL)
                             break;
                     }
                     else if (pThreads->size >= pThreads->capacity)
                     {
                         uint32_t *p = (uint32_t *)HeapReAlloc(
-                            g_hHeap, 0, pThreads->pItems, (pThreads->capacity * 2) * sizeof(DWORD));
+                            g_hHeap, 0, pThreads->pItems, (pThreads->capacity * 2) * sizeof(uint32_t));
                         if (p == NULL)
                             break;
 
@@ -340,10 +380,51 @@ static void EnumerateThreads(PFROZEN_THREADS pThreads)
         CloseHandle(hSnapshot);
     }
 }
+#elif defined(__APPLE__)
+static void EnumerateThreads(PFROZEN_THREADS pThreads)
+{
+    thread_act_port_array_t threadList;
+    mach_msg_type_number_t threadCount, i;
+    mach_port_t curtask = mach_task_self();
+    thread_t curthread;
+
+    if (task_threads(curtask, &threadList, &threadCount) != KERN_SUCCESS)
+        return;
+
+    curthread = mach_thread_self();
+    for (i = 0; i < threadCount; ++i)
+    {
+        if (threadList[i] == curthread)
+            continue;
+
+        if (pThreads->pItems == NULL)
+        {
+            pThreads->capacity = INITIAL_THREAD_CAPACITY;
+            pThreads->pItems = (uint32_t *)malloc(pThreads->capacity * sizeof(uint32_t));
+            if (pThreads->pItems == NULL)
+                break;
+        }
+        else if (pThreads->size >= pThreads->capacity)
+        {
+            uint32_t *p = (uint32_t *)realloc(
+                pThreads->pItems, (pThreads->capacity * 2) * sizeof(uint32_t));
+            if (p == NULL)
+                break;
+
+            pThreads->capacity *= 2;
+            pThreads->pItems = p;
+        }
+
+        pThreads->pItems[pThreads->size++] = threadList[i];
+    }
+
+    mach_vm_deallocate(curtask, (mach_vm_address_t)threadList, threadCount * sizeof(thread_act_t));
+    mach_port_deallocate(curtask, curthread);
+}
 #endif
 
 //-------------------------------------------------------------------------
-#ifdef _WIN32
+#if defined(_WIN32) || defined(__APPLE__)
 static void Freeze(PFROZEN_THREADS pThreads, uint32_t pos, uint32_t action)
 {
     pThreads->pItems   = NULL;
@@ -356,6 +437,7 @@ static void Freeze(PFROZEN_THREADS pThreads, uint32_t pos, uint32_t action)
         uint32_t i;
         for (i = 0; i < pThreads->size; ++i)
         {
+#ifdef _WIN32
             HANDLE hThread = OpenThread(THREAD_ACCESS, FALSE, pThreads->pItems[i]);
             if (hThread != NULL)
             {
@@ -363,29 +445,47 @@ static void Freeze(PFROZEN_THREADS pThreads, uint32_t pos, uint32_t action)
                 ProcessThreadIPs(hThread, pos, action);
                 CloseHandle(hThread);
             }
+#else
+            thread_act_t hThread = pThreads->pItems[i];
+            thread_suspend(hThread);
+            ProcessThreadIPs(hThread, pos, action);
+#endif
         }
     }
 }
 #endif
 
 //-------------------------------------------------------------------------
-#ifdef _WIN32
+#if defined(_WIN32) || defined(__APPLE__)
 static void Unfreeze(PFROZEN_THREADS pThreads)
 {
     if (pThreads->pItems != NULL)
     {
+#ifdef __APPLE__
+        task_t curtask = mach_thread_self();
+#endif
         uint32_t i;
         for (i = 0; i < pThreads->size; ++i)
         {
+#ifdef _WIN32
             HANDLE hThread = OpenThread(THREAD_ACCESS, FALSE, pThreads->pItems[i]);
             if (hThread != NULL)
             {
                 ResumeThread(hThread);
                 CloseHandle(hThread);
             }
+#else
+            thread_act_t hThread = pThreads->pItems[i];
+            thread_resume(hThread);
+            mach_port_deallocate(curtask, hThread);
+#endif
         }
 
+#ifdef _WIN32
         HeapFree(g_hHeap, 0, pThreads->pItems);
+#else
+        free(pThreads->pItems);
+#endif
     }
 }
 #endif
@@ -468,7 +568,7 @@ static MH_STATUS EnableAllHooksLL(bool enable)
 
     if (first != INVALID_HOOK_POS)
     {
-#ifdef _WIN32
+#if defined(_WIN32) || defined(__APPLE__)
         FROZEN_THREADS threads;
         Freeze(&threads, ALL_HOOKS_POS, enable ? ACTION_ENABLE : ACTION_DISABLE);
 #endif
@@ -483,7 +583,7 @@ static MH_STATUS EnableAllHooksLL(bool enable)
             }
         }
 
-#ifdef _WIN32
+#if defined(_WIN32) || defined(__APPLE__)
         Unfreeze(&threads);
 #endif
     }
@@ -648,7 +748,7 @@ MH_STATUS MH_API MH_CreateHook(void *pTarget, void *pDetour, void ** ppOriginal)
                         if (pHook != NULL)
                         {
                             pHook->pTarget     = ct.pTarget;
-#if defined(_M_X64) || defined(__x86_64__)
+#ifdef MH_X86_64
                             pHook->pDetour     = ct.pRelay;
 #else
                             pHook->pDetour     = ct.pDetour;
@@ -736,14 +836,14 @@ MH_STATUS MH_API MH_RemoveHook(void *pTarget)
         {
             if (g_hooks.pItems[pos].isEnabled)
             {
-#ifdef _WIN32
+#if defined(_WIN32) || defined(__APPLE__)
                 FROZEN_THREADS threads;
                 Freeze(&threads, pos, ACTION_DISABLE);
 #endif
 
                 status = EnableHookLL(pos, false);
 
-#ifdef _WIN32
+#if defined(_WIN32) || defined(__APPLE__)
                 Unfreeze(&threads);
 #endif
             }
@@ -793,14 +893,14 @@ static MH_STATUS EnableHook(void *pTarget, bool enable)
             {
                 if (g_hooks.pItems[pos].isEnabled != enable)
                 {
-#ifdef _WIN32
+#if defined(_WIN32) || defined(__APPLE__)
                     FROZEN_THREADS threads;
                     Freeze(&threads, pos, ACTION_ENABLE);
 #endif
 
                     status = EnableHookLL(pos, enable);
 
-#ifdef _WIN32
+#if defined(_WIN32) || defined(__APPLE__)
                     Unfreeze(&threads);
 #endif
                 }
@@ -916,7 +1016,7 @@ MH_STATUS MH_API MH_ApplyQueued(void)
 
         if (first != INVALID_HOOK_POS)
         {
-#ifdef _WIN32
+#if defined(_WIN32) || defined(__APPLE__)
             FROZEN_THREADS threads;
             Freeze(&threads, ALL_HOOKS_POS, ACTION_APPLY_QUEUED);
 #endif
@@ -932,7 +1032,7 @@ MH_STATUS MH_API MH_ApplyQueued(void)
                 }
             }
 
-#ifdef _WIN32
+#if defined(_WIN32) || defined(__APPLE__)
             Unfreeze(&threads);
 #endif
         }

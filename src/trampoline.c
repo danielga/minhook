@@ -26,7 +26,9 @@
  *  SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#if defined(_M_X64) || defined(__x86_64__)
+#include "architecture.h"
+
+#ifdef MH_X86_64
     #include "./hde/hde64.h"
     typedef hde64s HDE;
     #define HDE_DISASM(code, hs) hde64_disasm(code, hs)
@@ -49,7 +51,7 @@
 #endif
 
 // Maximum size of a trampoline function.
-#if defined(_M_X64) || defined(__x86_64__)
+#ifdef MH_X86_64
     #define TRAMPOLINE_MAX_SIZE (MEMORY_SLOT_SIZE - sizeof(JMP_ABS))
 #else
     #define TRAMPOLINE_MAX_SIZE MEMORY_SLOT_SIZE
@@ -74,7 +76,7 @@ static bool IsCodePadding(uint8_t *pInst, uint32_t size)
 //-------------------------------------------------------------------------
 bool CreateTrampolineFunction(PTRAMPOLINE ct)
 {
-#if defined(_M_X64) || defined(__x86_64__)
+#ifdef MH_X86_64
     CALL_ABS call = {
         0xFF, 0x15, 0x00000002, // FF15 00000002: CALL [RIP+8]
         0xEB, 0x08,             // EB 08:         JMP +10
@@ -108,7 +110,7 @@ bool CreateTrampolineFunction(PTRAMPOLINE ct)
     uint8_t   newPos   = 0;
     uintptr_t jmpDest  = 0;     // Destination address of an internal jump.
     bool      finished = false; // Is the function completed?
-#if defined(_M_X64) || defined(__x86_64__)
+#ifdef MH_X86_64
     uint8_t   instBuf[16];
 #endif
 
@@ -132,7 +134,7 @@ bool CreateTrampolineFunction(PTRAMPOLINE ct)
         {
             // The trampoline function is long enough.
             // Complete the function with the jump to the target function.
-#if defined(_M_X64) || defined(__x86_64__)
+#ifdef MH_X86_64
             jmp.address = pOldInst;
 #else
             jmp.operand = (uint32_t)(pOldInst - (pNewInst + sizeof(jmp)));
@@ -142,7 +144,7 @@ bool CreateTrampolineFunction(PTRAMPOLINE ct)
 
             finished = true;
         }
-#if defined(_M_X64) || defined(__x86_64__)
+#ifdef MH_X86_64
         else if ((hs.modrm & 0xC7) == 0x05)
         {
             // Instructions using RIP relative addressing. (ModR/M = 00???101B)
@@ -172,7 +174,7 @@ bool CreateTrampolineFunction(PTRAMPOLINE ct)
         {
             // Direct relative CALL
             uintptr_t dest = pOldInst + hs.len + (int32_t)hs.imm.imm32;
-#if defined(_M_X64) || defined(__x86_64__)
+#ifdef MH_X86_64
             call.address = dest;
 #else
             call.operand = (uint32_t)(dest - (pNewInst + sizeof(call)));
@@ -199,7 +201,7 @@ bool CreateTrampolineFunction(PTRAMPOLINE ct)
             }
             else
             {
-#if defined(_M_X64) || defined(__x86_64__)
+#ifdef MH_X86_64
                 jmp.address = dest;
 #else
                 jmp.operand = (uint32_t)(dest - (pNewInst + sizeof(jmp)));
@@ -239,7 +241,7 @@ bool CreateTrampolineFunction(PTRAMPOLINE ct)
             else
             {
                 uint8_t cond = ((hs.opcode != 0x0F ? hs.opcode : hs.opcode2) & 0x0F);
-#if defined(_M_X64) || defined(__x86_64__)
+#ifdef MH_X86_64
                 // Invert the condition in x64 mode to simplify the conditional jump logic.
                 jcc.opcode  = 0x71 ^ cond;
                 jcc.address = dest;
@@ -307,7 +309,7 @@ bool CreateTrampolineFunction(PTRAMPOLINE ct)
         ct->patchAbove = true;
     }
 
-#if defined(_M_X64) || defined(__x86_64__)
+#ifdef MH_X86_64
     // Create a relay function.
     jmp.address = (uintptr_t)ct->pDetour;
 
