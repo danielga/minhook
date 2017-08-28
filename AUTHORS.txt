@@ -8,4 +8,4 @@ Andrey Unis <uniskz@gmail.com>
  Rewrote the hook engine in plain C.
 
 Daniel Almeida <danielga@outlook.pt>
- Added POSIX support.
+ Added POSIX and MacOS X support.
