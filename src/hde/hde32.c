@@ -5,6 +5,10 @@
  *
  */
 
+#include "../architecture.h"
+
+#ifdef MH_X86
+
 #include "hde32.h"
 #include "table32.h"
 
@@ -13,8 +17,6 @@
 #else
 #include <string.h>
 #endif
-
-#if defined(_M_IX86) || defined(___i386__) || defined(__i386) || defined(__X86__) || defined(_X86_) || defined(__I86__)
 
 unsigned int hde32_disasm(const void *code, hde32s *hs)
 {
@@ -329,4 +331,4 @@ unsigned int hde32_disasm(const void *code, hde32s *hs)
     return (unsigned int)hs->len;
 }
 
-#endif // defined(_M_IX86) || defined(___i386__) || defined(__i386) || defined(__X86__) || defined(_X86_) || defined(__I86__)
+#endif // MH_X86

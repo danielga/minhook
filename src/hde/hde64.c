@@ -5,6 +5,10 @@
  *
  */
 
+#include "../architecture.h"
+
+#ifdef MH_X86_64
+
 #include "hde64.h"
 #include "table64.h"
 
@@ -13,8 +17,6 @@
 #else
 #include <string.h>
 #endif
-
-#if defined(_M_X64) || defined(__amd64__) || defined(__amd64) || defined(__x86_64__) || defined(__x86_64)
 
 unsigned int hde64_disasm(const void *code, hde64s *hs)
 {
@@ -341,4 +343,4 @@ unsigned int hde64_disasm(const void *code, hde64s *hs)
     return (unsigned int)hs->len;
 }
 
-#endif // defined(_M_X64) || defined(__amd64__) || defined(__amd64) || defined(__x86_64__) || defined(__x86_64)
+#endif // MH_X86_64
