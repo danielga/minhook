@@ -30,17 +30,16 @@
 #include <windows.h>
 #include <tlhelp32.h>
 #else
+#ifdef __APPLE__
+#include <mach/mach.h>
+#include <mach/mach_vm.h>
+#endif
 #include <unistd.h>
 #include <stdlib.h>
 #include <dlfcn.h>
 #include <sys/mman.h>
 #include <string.h>
 #include <locale.h>
-#endif
-
-#ifdef __APPLE__
-#include <mach/mach.h>
-#include <mach/mach_vm.h>
 #endif
 
 #include <limits.h>

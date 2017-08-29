@@ -21,9 +21,12 @@ I need some funds to continue developing this library. All contributions gratefu
 
 ### Version history
 
+- **v1.3.6 - 29 Aug 2017**
+  * Fixed IsExecutableAddress failing in x86-64 because of incorrect parameters
+
 - **v1.3.5 - 28 Aug 2017**
   * Improved architecture discovery
-  * Added full MacOS X support (thread suspension and context changing, untested as of this day)
+  * Added full MacOS X support (thread suspension and context changing)
   * Added GCC Makefile (able to compile for Windows, Linux and MacOS X)
 
 - **v1.3.4 - 27 Aug 2017**
