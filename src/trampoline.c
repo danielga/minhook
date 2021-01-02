@@ -28,6 +28,14 @@
 
 #include "architecture.h"
 
+#ifdef _MSC_VER
+    #include <intrin.h>
+#endif
+
+#ifndef ARRAYSIZE
+    #define ARRAYSIZE(A) (sizeof(A)/sizeof((A)[0]))
+#endif
+
 #ifdef MH_X86_64
     #include "./hde/hde64.h"
     typedef hde64s HDE;

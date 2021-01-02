@@ -9,6 +9,7 @@
 
 #ifdef MH_X86_64
 
+#include <string.h>
 #include "hde64.h"
 #include "table64.h"
 
@@ -24,12 +25,7 @@ unsigned int hde64_disasm(const void *code, hde64s *hs)
     uint8_t *ht = hde64_table, m_mod, m_reg, m_rm, disp_size = 0;
     uint8_t op64 = 0;
 
-    // Avoid using memset to reduce the footprint.
-#ifndef _MSC_VER
-    memset((uint8_t *)hs, 0, sizeof(hde64s));
-#else
-    __stosb((uint8_t *)hs, 0, sizeof(hde64s));
-#endif
+    memset(hs, 0, sizeof(hde64s));
 
     for (x = 16; x; x--)
         switch (c = *p++) {

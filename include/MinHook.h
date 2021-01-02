@@ -100,7 +100,7 @@ extern "C" {
     // as many times as you called MH_Initialize.
     MH_STATUS MH_API MH_Uninitialize(void);
 
-    // Creates a Hook for the specified target function, in disabled state.
+    // Creates a hook for the specified target function, in disabled state.
     // Parameters:
     //   pTarget    [in]  A pointer to the target function, which will be
     //                    overridden by the detour function.
@@ -111,34 +111,34 @@ extern "C" {
     //                    This parameter can be NULL.
     MH_STATUS MH_API MH_CreateHook(void *pTarget, void *pDetour, void **ppOriginal);
 
-    // Creates a Hook for the specified API function, in disabled state.
+    // Creates a hook for the specified API function, in disabled state.
     // Parameters:
-    //   pszModule  [in]  A pointer to the loaded module name which contains the
-    //                    target function.
-    //   pszTarget  [in]  A pointer to the target function name, which will be
-    //                    overridden by the detour function.
-    //   pDetour    [in]  A pointer to the detour function, which will override
-    //                    the target function.
-    //   ppOriginal [out] A pointer to the trampoline function, which will be
-    //                    used to call the original target function.
-    //                    This parameter can be NULL.
+    //   pszModule   [in]  A pointer to the loaded module name which contains the
+    //                     target function.
+    //   pszProcName [in]  A pointer to the target function name, which will be
+    //                     overridden by the detour function.
+    //   pDetour     [in]  A pointer to the detour function, which will override
+    //                     the target function.
+    //   ppOriginal  [out] A pointer to the trampoline function, which will be
+    //                     used to call the original target function.
+    //                     This parameter can be NULL.
     MH_STATUS MH_API MH_CreateHookApi(
         const wchar_t *pszModule, const char *pszProcName, void *pDetour, void **ppOriginal);
 
-    // Creates a Hook for the specified API function, in disabled state.
+    // Creates a hook for the specified API function, in disabled state.
     // Parameters:
-    //   pszModule  [in]  A pointer to the loaded module name which contains the
-    //                    target function.
-    //   pszTarget  [in]  A pointer to the target function name, which will be
-    //                    overridden by the detour function.
-    //   pDetour    [in]  A pointer to the detour function, which will override
-    //                    the target function.
-    //   ppOriginal [out] A pointer to the trampoline function, which will be
-    //                    used to call the original target function.
-    //                    This parameter can be NULL.
-    //   ppTarget   [out] A pointer to the target function, which will be used
-    //                    with other functions.
-    //                    This parameter can be NULL.
+    //   pszModule   [in]  A pointer to the loaded module name which contains the
+    //                     target function.
+    //   pszProcName [in]  A pointer to the target function name, which will be
+    //                     overridden by the detour function.
+    //   pDetour     [in]  A pointer to the detour function, which will override
+    //                     the target function.
+    //   ppOriginal  [out] A pointer to the trampoline function, which will be
+    //                     used to call the original target function.
+    //                     This parameter can be NULL.
+    //   ppTarget    [out] A pointer to the target function, which will be used
+    //                     with other functions.
+    //                     This parameter can be NULL.
     MH_STATUS MH_API MH_CreateHookApiEx(
         const wchar_t *pszModule, const char *pszProcName, void *pDetour, void **ppOriginal, void **ppTarget);
 
@@ -184,4 +184,3 @@ extern "C" {
 #ifdef __cplusplus
 }
 #endif
-
