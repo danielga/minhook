@@ -15,6 +15,9 @@ However, there is an assumption being made in the function GetMemoryBlock, locat
 
 ### Version history
 
+- **v1.4.0 - 24 Jan 2021**
+  * Added MH_IsHookEnabled to get the hook state.
+
 - **v1.3.8 - 8 Jul 2018**
   * Fixed MH_CreateHookApiEx malloc size for module name.
   * Fixed IsExecutableAddress for macOS (using incorrect region basic info).

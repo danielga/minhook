@@ -85,6 +85,12 @@ typedef enum MH_STATUS
 }
 MH_STATUS;
 
+// Returned by MH_IsHookEnabled, the hook for the specified target function is enabled.
+#define MH_HOOK_ENABLED MH_ERROR_ENABLED
+
+// Returned by MH_IsHookEnabled, the hook for the specified target function is not enabled.
+#define MH_HOOK_DISABLED MH_ERROR_DISABLED
+
 // Can be passed as a parameter to MH_EnableHook, MH_DisableHook,
 // MH_QueueEnableHook or MH_QueueDisableHook.
 #define MH_ALL_HOOKS NULL
@@ -146,6 +152,12 @@ extern "C" {
     // Parameters:
     //   pTarget [in] A pointer to the target function.
     MH_STATUS MH_API MH_RemoveHook(void *pTarget);
+
+    // Returns the state of the hook.
+    // Returns MH_HOOK_ENABLED if enabled, MH_HOOK_DISABLED if disabled or any other value if errored.
+    // Parameters:
+    //   pTarget [in] A pointer to the target function.
+    MH_STATUS MH_API MH_IsHookEnabled(void* pTarget);
 
     // Enables an already created hook.
     // Parameters:

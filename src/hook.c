@@ -1,4 +1,4 @@
-﻿/*
+/*
  *  MinHook - The Minimalistic API Hooking Library for x64/x86
  *  Copyright (C) 2009-2017 Tsuda Kageyu.
  *  All rights reserved.
@@ -858,6 +858,39 @@ MH_STATUS MH_API MH_RemoveHook(void *pTarget)
                 FreeBuffer(g_hooks.pItems[pos].pTrampoline);
                 DeleteHookEntry(pos);
             }
+        }
+        else
+        {
+            status = MH_ERROR_NOT_CREATED;
+        }
+#ifdef _WIN32
+    }
+    else
+    {
+        status = MH_ERROR_NOT_INITIALIZED;
+    }
+#endif
+
+    LeaveSpinLock();
+
+    return status;
+}
+
+//-------------------------------------------------------------------------
+MH_STATUS MH_API MH_IsHookEnabled(void *pTarget)
+{
+    MH_STATUS status = MH_OK;
+
+    EnterSpinLock();
+
+#ifdef _WIN32
+    if (g_hHeap != NULL)
+    {
+#endif
+        uint32_t pos = FindHookEntry(pTarget);
+        if (pos != INVALID_HOOK_POS)
+        {
+            status = g_hooks.pItems[pos].isEnabled ? MH_HOOK_ENABLED : MH_HOOK_DISABLED;
         }
         else
         {
