@@ -340,8 +340,10 @@ static void ProcessThreadIPs(THREAD_HANDLE hThread, uint32_t pos, uint32_t actio
 
 //-------------------------------------------------------------------------
 #if defined(_WIN32)
-static void EnumerateThreads(PFROZEN_THREADS pThreads)
+static bool EnumerateThreads(PFROZEN_THREADS pThreads)
 {
+    BOOL succeeded = FALSE;
+
     HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
     if (hSnapshot != INVALID_HANDLE_VALUE)
     {
@@ -349,6 +351,7 @@ static void EnumerateThreads(PFROZEN_THREADS pThreads)
         te.dwSize = sizeof(THREADENTRY32);
         if (Thread32First(hSnapshot, &te))
         {
+            succeeded = TRUE;
             do
             {
                 if (te.dwSize >= (FIELD_OFFSET(THREADENTRY32, th32OwnerProcessID) + sizeof(uint32_t))
@@ -361,16 +364,22 @@ static void EnumerateThreads(PFROZEN_THREADS pThreads)
                         pThreads->pItems
                             = (uint32_t *)HeapAlloc(g_hHeap, 0, pThreads->capacity * sizeof(uint32_t));
                         if (pThreads->pItems == NULL)
+                        {
+                            succeeded = FALSE;
                             break;
+                        }
                     }
                     else if (pThreads->size >= pThreads->capacity)
                     {
-                        uint32_t *p = (uint32_t *)HeapReAlloc(
-                            g_hHeap, 0, pThreads->pItems, (pThreads->capacity * 2) * sizeof(uint32_t));
-                        if (p == NULL)
-                            break;
-
                         pThreads->capacity *= 2;
+                        uint32_t *p = (uint32_t *)HeapReAlloc(
+                            g_hHeap, 0, pThreads->pItems, pThreads->capacity * sizeof(uint32_t));
+                        if (p == NULL)
+                        {
+                            succeeded = FALSE;
+                            break;
+                        }
+
                         pThreads->pItems = p;
                     }
                     pThreads->pItems[pThreads->size++] = te.th32ThreadID;
@@ -378,9 +387,20 @@ static void EnumerateThreads(PFROZEN_THREADS pThreads)
 
                 te.dwSize = sizeof(THREADENTRY32);
             } while (Thread32Next(hSnapshot, &te));
+
+            if (succeeded && GetLastError() != ERROR_NO_MORE_FILES)
+                succeeded = FALSE;
+
+            if (!succeeded && pThreads->pItems != NULL)
+            {
+                HeapFree(g_hHeap, 0, pThreads->pItems);
+                pThreads->pItems = NULL;
+            }
         }
         CloseHandle(hSnapshot);
     }
+
+    return succeeded;
 }
 #elif defined(__APPLE__)
 static void EnumerateThreads(PFROZEN_THREADS pThreads)
@@ -427,14 +447,18 @@ static void EnumerateThreads(PFROZEN_THREADS pThreads)
 
 //-------------------------------------------------------------------------
 #if defined(_WIN32) || defined(__APPLE__)
-static void Freeze(PFROZEN_THREADS pThreads, uint32_t pos, uint32_t action)
+static MH_STATUS Freeze(PFROZEN_THREADS pThreads, uint32_t pos, uint32_t action)
 {
+    MH_STATUS status = MH_OK;
+
     pThreads->pItems   = NULL;
     pThreads->capacity = 0;
     pThreads->size     = 0;
-    EnumerateThreads(pThreads);
-
-    if (pThreads->pItems != NULL)
+    if (!EnumerateThreads(pThreads))
+    {
+        status = MH_ERROR_MEMORY_ALLOC;
+    }
+    else if (pThreads->pItems != NULL)
     {
         uint32_t i;
         for (i = 0; i < pThreads->size; ++i)
@@ -454,6 +478,8 @@ static void Freeze(PFROZEN_THREADS pThreads, uint32_t pos, uint32_t action)
 #endif
         }
     }
+
+    return status;
 }
 #endif
 
@@ -572,21 +598,24 @@ static MH_STATUS EnableAllHooksLL(bool enable)
     {
 #if defined(_WIN32) || defined(__APPLE__)
         FROZEN_THREADS threads;
-        Freeze(&threads, ALL_HOOKS_POS, enable ? ACTION_ENABLE : ACTION_DISABLE);
+        status = Freeze(&threads, ALL_HOOKS_POS, enable ? ACTION_ENABLE : ACTION_DISABLE);
+        if (status == MH_OK)
+        {
 #endif
 
-        for (i = first; i < g_hooks.size; ++i)
-        {
-            if (g_hooks.pItems[i].isEnabled != enable)
+            for (i = first; i < g_hooks.size; ++i)
             {
-                status = EnableHookLL(i, enable);
-                if (status != MH_OK)
-                    break;
+                if (g_hooks.pItems[i].isEnabled != enable)
+                {
+                    status = EnableHookLL(i, enable);
+                    if (status != MH_OK)
+                        break;
+                }
             }
-        }
 
 #if defined(_WIN32) || defined(__APPLE__)
-        Unfreeze(&threads);
+            Unfreeze(&threads);
+        }
 #endif
     }
 
@@ -843,13 +872,16 @@ MH_STATUS MH_API MH_RemoveHook(void *pTarget)
             {
 #if defined(_WIN32) || defined(__APPLE__)
                 FROZEN_THREADS threads;
-                Freeze(&threads, pos, ACTION_DISABLE);
+                status = Freeze(&threads, pos, ACTION_DISABLE);
+                if (status == MH_OK)
+                {
 #endif
 
-                status = EnableHookLL(pos, false);
+                    status = EnableHookLL(pos, FALSE);
 
 #if defined(_WIN32) || defined(__APPLE__)
-                Unfreeze(&threads);
+                    Unfreeze(&threads);
+                }
 #endif
             }
 
@@ -933,13 +965,16 @@ static MH_STATUS EnableHook(void *pTarget, bool enable)
                 {
 #if defined(_WIN32) || defined(__APPLE__)
                     FROZEN_THREADS threads;
-                    Freeze(&threads, pos, ACTION_ENABLE);
+                    status = Freeze(&threads, pos, ACTION_ENABLE);
+                    if (status == MH_OK)
+                    {
 #endif
 
-                    status = EnableHookLL(pos, enable);
+                        status = EnableHookLL(pos, enable);
 
 #if defined(_WIN32) || defined(__APPLE__)
-                    Unfreeze(&threads);
+                        Unfreeze(&threads);
+                    }
 #endif
                 }
                 else
@@ -1056,22 +1091,25 @@ MH_STATUS MH_API MH_ApplyQueued(void)
         {
 #if defined(_WIN32) || defined(__APPLE__)
             FROZEN_THREADS threads;
-            Freeze(&threads, ALL_HOOKS_POS, ACTION_APPLY_QUEUED);
+            status = Freeze(&threads, ALL_HOOKS_POS, ACTION_APPLY_QUEUED);
+            if (status == MH_OK)
+            {
 #endif
 
-            for (i = first; i < g_hooks.size; ++i)
-            {
-                PHOOK_ENTRY pHook = &g_hooks.pItems[i];
-                if (pHook->isEnabled != pHook->queueEnable)
+                for (i = first; i < g_hooks.size; ++i)
                 {
-                    status = EnableHookLL(i, pHook->queueEnable);
-                    if (status != MH_OK)
-                        break;
+                    PHOOK_ENTRY pHook = &g_hooks.pItems[i];
+                    if (pHook->isEnabled != pHook->queueEnable)
+                    {
+                        status = EnableHookLL(i, pHook->queueEnable);
+                        if (status != MH_OK)
+                            break;
+                    }
                 }
-            }
 
 #if defined(_WIN32) || defined(__APPLE__)
-            Unfreeze(&threads);
+                Unfreeze(&threads);
+            }
 #endif
         }
 #ifdef _WIN32

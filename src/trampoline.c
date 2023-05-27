@@ -28,6 +28,15 @@
 
 #include "architecture.h"
 
+#if defined(_MSC_VER) && !defined(MINHOOK_DISABLE_INTRINSICS)
+    #define ALLOW_INTRINSICS
+    #include <intrin.h>
+#endif
+
+#ifndef ARRAYSIZE
+    #define ARRAYSIZE(A) (sizeof(A)/sizeof((A)[0]))
+#endif
+
 #ifdef MH_X86_64
     #include "hde/hde64.h"
     typedef hde64s HDE;
@@ -44,10 +53,6 @@
 
 #ifdef _MSC_VER
 #include <intrin.h>
-#endif
-
-#ifndef ARRAYSIZE
-    #define ARRAYSIZE(A) (sizeof(A)/sizeof((A)[0]))
 #endif
 
 // Maximum size of a trampoline function.
@@ -153,7 +158,7 @@ bool CreateTrampolineFunction(PTRAMPOLINE ct)
             uint32_t *pRelAddr;
 
             // Avoid using memcpy to reduce the footprint.
-#ifndef _MSC_VER
+#ifndef ALLOW_INTRINSICS
             memcpy(instBuf, (uint8_t *)pOldInst, copySize);
 #else
             __movsb(instBuf, (uint8_t *)pOldInst, copySize);
@@ -249,7 +254,7 @@ bool CreateTrampolineFunction(PTRAMPOLINE ct)
                 pCopySrc = &jmp;
                 copySize = sizeof(jmp);
 
-                // Exit the function If it is not in the branch
+                // Exit the function if it is not in the branch.
                 finished = (pOldInst >= jmpDest);
             }
         }
@@ -318,10 +323,10 @@ bool CreateTrampolineFunction(PTRAMPOLINE ct)
         ct->nIP++;
 
         // Avoid using memcpy to reduce the footprint.
-#ifndef _MSC_VER
+#ifndef ALLOW_INTRINSICS
         memcpy((uint8_t *)ct->pTrampoline + newPos, pCopySrc, copySize);
 #else
-        __movsb((uint8_t *)ct->pTrampoline + newPos, pCopySrc, copySize);
+        __movsb((uint8_t *)ct->pTrampoline + newPos, (uint8_t *)pCopySrc, copySize);
 #endif
         newPos += (uint8_t)copySize;
         oldPos += hs.len;
