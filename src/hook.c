@@ -342,7 +342,7 @@ static void ProcessThreadIPs(THREAD_HANDLE hThread, uint32_t pos, uint32_t actio
 #if defined(_WIN32)
 static bool EnumerateThreads(PFROZEN_THREADS pThreads)
 {
-    BOOL succeeded = FALSE;
+    bool succeeded = false;
 
     HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
     if (hSnapshot != INVALID_HANDLE_VALUE)
@@ -351,7 +351,7 @@ static bool EnumerateThreads(PFROZEN_THREADS pThreads)
         te.dwSize = sizeof(THREADENTRY32);
         if (Thread32First(hSnapshot, &te))
         {
-            succeeded = TRUE;
+            succeeded = true;
             do
             {
                 if (te.dwSize >= (FIELD_OFFSET(THREADENTRY32, th32OwnerProcessID) + sizeof(uint32_t))
@@ -365,7 +365,7 @@ static bool EnumerateThreads(PFROZEN_THREADS pThreads)
                             = (uint32_t *)HeapAlloc(g_hHeap, 0, pThreads->capacity * sizeof(uint32_t));
                         if (pThreads->pItems == NULL)
                         {
-                            succeeded = FALSE;
+                            succeeded = false;
                             break;
                         }
                     }
@@ -376,7 +376,7 @@ static bool EnumerateThreads(PFROZEN_THREADS pThreads)
                             g_hHeap, 0, pThreads->pItems, pThreads->capacity * sizeof(uint32_t));
                         if (p == NULL)
                         {
-                            succeeded = FALSE;
+                            succeeded = false;
                             break;
                         }
 
@@ -389,7 +389,7 @@ static bool EnumerateThreads(PFROZEN_THREADS pThreads)
             } while (Thread32Next(hSnapshot, &te));
 
             if (succeeded && GetLastError() != ERROR_NO_MORE_FILES)
-                succeeded = FALSE;
+                succeeded = false;
 
             if (!succeeded && pThreads->pItems != NULL)
             {
@@ -403,16 +403,18 @@ static bool EnumerateThreads(PFROZEN_THREADS pThreads)
     return succeeded;
 }
 #elif defined(__APPLE__)
-static void EnumerateThreads(PFROZEN_THREADS pThreads)
+static bool EnumerateThreads(PFROZEN_THREADS pThreads)
 {
     thread_act_port_array_t threadList;
     mach_msg_type_number_t threadCount, i;
     mach_port_t curtask = mach_task_self();
     thread_t curthread;
 
+    bool succeeded = false;
     if (task_threads(curtask, &threadList, &threadCount) != KERN_SUCCESS)
-        return;
+        return succeeded;
 
+    succeeded = true;
     curthread = mach_thread_self();
     for (i = 0; i < threadCount; ++i)
     {
@@ -424,24 +426,37 @@ static void EnumerateThreads(PFROZEN_THREADS pThreads)
             pThreads->capacity = INITIAL_THREAD_CAPACITY;
             pThreads->pItems = (uint32_t *)malloc(pThreads->capacity * sizeof(uint32_t));
             if (pThreads->pItems == NULL)
+            {
+                succeeded = false;
                 break;
+            }
         }
         else if (pThreads->size >= pThreads->capacity)
         {
-            uint32_t *p = (uint32_t *)realloc(
-                pThreads->pItems, (pThreads->capacity * 2) * sizeof(uint32_t));
-            if (p == NULL)
-                break;
-
             pThreads->capacity *= 2;
+            uint32_t *p = (uint32_t *)realloc(
+                pThreads->pItems, pThreads->capacity * sizeof(uint32_t));
+            if (p == NULL)
+            {
+                succeeded = false;
+                break;
+            }
+
             pThreads->pItems = p;
         }
 
         pThreads->pItems[pThreads->size++] = threadList[i];
     }
 
+    if (!succeeded && pThreads->pItems != NULL)
+    {
+        free(pThreads->pItems);
+        pThreads->pItems = NULL;
+    }
+
     mach_vm_deallocate(curtask, (mach_vm_address_t)threadList, threadCount * sizeof(thread_act_t));
     mach_port_deallocate(curtask, curthread);
+    return succeeded;
 }
 #endif
 
