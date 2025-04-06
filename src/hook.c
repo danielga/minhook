@@ -907,7 +907,7 @@ MH_STATUS MH_API MH_RemoveHook(void *pTarget)
                 {
 #endif
 
-                    status = EnableHookLL(pos, true);
+                    status = EnableHookLL(pos, false);
 
 #if defined(_WIN32) || defined(__APPLE__)
                     Unfreeze(&threads);
