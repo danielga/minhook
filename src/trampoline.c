@@ -330,8 +330,7 @@ bool CreateTrampolineFunction(PTRAMPOLINE ct)
 #endif
         newPos += (uint8_t)copySize;
         oldPos += hs.len;
-    }
-    while (!finished);
+    } while (!finished);
 
     // Is there enough place for a long jump?
     if (oldPos < sizeof(JMP_REL)

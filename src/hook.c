@@ -480,11 +480,22 @@ static MH_STATUS Freeze(PFROZEN_THREADS pThreads, uint32_t pos, uint32_t action)
         {
 #ifdef _WIN32
             HANDLE hThread = OpenThread(THREAD_ACCESS, FALSE, pThreads->pItems[i]);
+            BOOL suspended = FALSE;
             if (hThread != NULL)
             {
-                SuspendThread(hThread);
-                ProcessThreadIPs(hThread, pos, action);
+                DWORD result = SuspendThread(hThread);
+                if (result != 0xFFFFFFFF)
+                {
+                    suspended = TRUE;
+                    ProcessThreadIPs(hThread, pos, action);
+                }
                 CloseHandle(hThread);
+            }
+
+            if (!suspended)
+            {
+                // Mark thread as not suspended, so it's not resumed later on.
+                pThreads->pItems[i] = 0;
             }
 #else
             thread_act_t hThread = pThreads->pItems[i];
@@ -511,11 +522,15 @@ static void Unfreeze(PFROZEN_THREADS pThreads)
         for (i = 0; i < pThreads->size; ++i)
         {
 #ifdef _WIN32
-            HANDLE hThread = OpenThread(THREAD_ACCESS, FALSE, pThreads->pItems[i]);
-            if (hThread != NULL)
+            DWORD threadId = pThreads->pItems[i];
+            if (threadId != 0)
             {
-                ResumeThread(hThread);
-                CloseHandle(hThread);
+                HANDLE hThread = OpenThread(THREAD_ACCESS, FALSE, threadId);
+                if (hThread != NULL)
+                {
+                    ResumeThread(hThread);
+                    CloseHandle(hThread);
+                }
             }
 #else
             thread_act_t hThread = pThreads->pItems[i];
@@ -1186,7 +1201,7 @@ MH_STATUS MH_API MH_CreateHookApiEx(
     if (pTarget == NULL)
         return MH_ERROR_FUNCTION_NOT_FOUND;
 
-    if(ppTarget != NULL)
+    if (ppTarget != NULL)
         *ppTarget = pTarget;
 
     return MH_CreateHook(pTarget, pDetour, ppOriginal);
@@ -1196,7 +1211,7 @@ MH_STATUS MH_API MH_CreateHookApiEx(
 MH_STATUS MH_API MH_CreateHookApi(
     const wchar_t *pszModule, const char *pszProcName, void *pDetour, void ** ppOriginal)
 {
-   return MH_CreateHookApiEx(pszModule, pszProcName, pDetour, ppOriginal, NULL);
+    return MH_CreateHookApiEx(pszModule, pszProcName, pDetour, ppOriginal, NULL);
 }
 
 //-------------------------------------------------------------------------

@@ -15,6 +15,16 @@ However, there is an assumption being made in the function GetMemoryBlock, locat
 
 ### Version history
 
+- **v1.4.2 - 28 Mar 2025**
+  * Improved error handling for enumerating and suspending threads.
+  * Visual Studio VS2022 support.
+  * CMake support.
+  * Fixed compilation with Clang.
+  * Fixed compilation as C++ code.
+
+- **v1.4.1 - 28 May 2023**
+  * Fix compilation errors on POSIX and macOS.
+
 - **v1.4.0 - 24 Jan 2021**
   * Added MH_IsHookEnabled to get the hook state.
 
