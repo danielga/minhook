@@ -15,6 +15,9 @@ However, there is an assumption being made in the function GetMemoryBlock, locat
 
 ### Version history
 
+- **v1.4.3 - 06 Apr 2025**
+  * Fix ```MH_RemoveHook``` not disabling the hook before removing it.
+
 - **v1.4.2 - 28 Mar 2025**
   * Improved error handling for enumerating and suspending threads.
   * Visual Studio VS2022 support.
