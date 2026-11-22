@@ -219,6 +219,20 @@ bool CreateTrampolineFunction(PTRAMPOLINE ct)
                 call.operand = pOldInst + 5;
                 break;
 
+            // mov edi [esp]
+            // ret
+            case 0xC3243C8B:
+                call.opcode = 0xBF;
+                call.operand = pOldInst + 5;
+                break;
+
+            // mov ebp [esp]
+            // ret
+            case 0xC3242C8B:
+                call.opcode = 0xBD;
+                call.operand = pOldInst + 5;
+                break;
+
             default:
                 call.operand = (uint32_t)(dest - (pNewInst + sizeof(call)));
                 break;
