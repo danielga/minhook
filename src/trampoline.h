@@ -1,4 +1,4 @@
-﻿/*
+﻿﻿/*
  *  MinHook - The Minimalistic API Hooking Library for x64/x86
  *  Copyright (C) 2009-2017 Tsuda Kageyu.
  *  All rights reserved.
@@ -39,15 +39,15 @@
 // 8-bit relative jump.
 typedef struct _JMP_REL_SHORT
 {
-    uint8_t opcode;      // EB xx: JMP +2+xx
-    uint8_t operand;
+    uint8_t  opcode;      // EB xx: JMP +2+xx
+    int8_t   operand;     // Relative destination address
 } JMP_REL_SHORT, *PJMP_REL_SHORT;
 
 // 32-bit direct relative jump/call.
 typedef struct _JMP_REL
 {
     uint8_t  opcode;      // E9/E8 xxxxxxxx: JMP/CALL +5+xxxxxxxx
-    uint32_t operand;     // Relative destination address
+    int32_t  operand;     // Relative destination address
 } JMP_REL, *PJMP_REL, CALL_REL;
 
 // 64-bit indirect absolute jump.
@@ -75,7 +75,7 @@ typedef struct _JCC_REL
 {
     uint8_t  opcode0;     // 0F8* xxxxxxxx: J** +6+xxxxxxxx
     uint8_t  opcode1;
-    uint32_t operand;     // Relative destination address
+    int32_t  operand;     // Relative destination address
 } JCC_REL;
 
 // 64bit indirect absolute conditional jumps that x64 lacks.
@@ -100,7 +100,7 @@ typedef struct _TRAMPOLINE
 #ifdef MH_X86_64
     void    *pRelay;          // [Out] Address of the relay function.
 #endif
-    int      patchAbove;      // [Out] Should use the hot patch area?
+    bool     patchAbove;      // [Out] Should use the hot patch area?
     uint32_t nIP;             // [Out] Number of the instruction boundaries.
     uint8_t  oldIPs[8];       // [Out] Instruction boundaries of the target function.
     uint8_t  newIPs[8];       // [Out] Instruction boundaries of the trampoline function.

@@ -142,7 +142,7 @@ bool CreateTrampolineFunction(PTRAMPOLINE ct)
 #ifdef MH_X86_64
             jmp.address = pOldInst;
 #else
-            jmp.operand = (uint32_t)(pOldInst - (pNewInst + sizeof(jmp)));
+            jmp.operand = (int32_t)(pOldInst - (pNewInst + sizeof(jmp)));
 #endif
             pCopySrc = &jmp;
             copySize = sizeof(jmp);
@@ -234,7 +234,7 @@ bool CreateTrampolineFunction(PTRAMPOLINE ct)
                 break;
 
             default:
-                call.operand = (uint32_t)(dest - (pNewInst + sizeof(call)));
+                call.operand = (int32_t)(dest - (pNewInst + sizeof(call)));
                 break;
             }
 #endif
@@ -263,7 +263,7 @@ bool CreateTrampolineFunction(PTRAMPOLINE ct)
 #ifdef MH_X86_64
                 jmp.address = dest;
 #else
-                jmp.operand = (uint32_t)(dest - (pNewInst + sizeof(jmp)));
+                jmp.operand = (int32_t)(dest - (pNewInst + sizeof(jmp)));
 #endif
                 pCopySrc = &jmp;
                 copySize = sizeof(jmp);
@@ -306,7 +306,7 @@ bool CreateTrampolineFunction(PTRAMPOLINE ct)
                 jcc.address = dest;
 #else
                 jcc.opcode1 = 0x80 | cond;
-                jcc.operand = (uint32_t)(dest - (pNewInst + sizeof(jcc)));
+                jcc.operand = (int32_t)(dest - (pNewInst + sizeof(jcc)));
 #endif
                 pCopySrc = &jcc;
                 copySize = sizeof(jcc);

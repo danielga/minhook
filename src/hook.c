@@ -111,20 +111,20 @@ typedef struct _FROZEN_THREADS
 
 #ifdef _WIN32
 // Spin lock flag for EnterSpinLock()/LeaveSpinLock().
-volatile LONG g_isLocked = FALSE;
+static volatile LONG g_isLocked = FALSE;
 
 // Private heap handle. If not NULL, this library is initialized.
-HANDLE g_hHeap = NULL;
+static HANDLE g_hHeap = NULL;
 #else
 // Spin lock flag for EnterSpinLock()/LeaveSpinLock().
-volatile bool g_isLocked = false;
+static volatile bool g_isLocked = false;
 #endif
 
 // Initialization counter, only uninitialize when it hits zero.
-volatile int32_t g_initCounter = 0;
+static volatile int32_t g_initCounter = 0;
 
 // Hook entries.
-struct
+static struct
 {
     PHOOK_ENTRY pItems;     // Data heap
     uint32_t    capacity;   // Size of allocated data heap, items
@@ -577,13 +577,13 @@ static MH_STATUS EnableHookLL(uint32_t pos, bool enable)
     {
         PJMP_REL pJmp = (PJMP_REL)pPatchTarget;
         pJmp->opcode = 0xE9;
-        pJmp->operand = (uint32_t)((uint8_t *)pHook->pDetour - (pPatchTarget + sizeof(JMP_REL)));
+        pJmp->operand = (int32_t)((uint8_t *)pHook->pDetour - (pPatchTarget + sizeof(JMP_REL)));
 
         if (pHook->patchAbove)
         {
             PJMP_REL_SHORT pShortJmp = (PJMP_REL_SHORT)pHook->pTarget;
             pShortJmp->opcode = 0xEB;
-            pShortJmp->operand = (uint8_t)(0 + sizeof(JMP_REL) - (sizeof(JMP_REL_SHORT)));
+            pShortJmp->operand = (int8_t)(0 - (sizeof(JMP_REL_SHORT) + sizeof(JMP_REL)));
         }
     }
     else
